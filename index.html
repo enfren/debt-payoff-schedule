@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debt Payoff Schedule</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f4f7f6;
+            display: flex;
+            justify-content: center;
+            padding: 2rem 1rem;
+            margin: 0;
+        }
+        .container {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 950px;
+        }
+        h2 { text-align: center; color: #333; margin-bottom: 1.5rem; }
+        .inputs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+        .input-group { flex: 1; min-width: 140px; }
+        label { display: block; margin-bottom: 0.4rem; color: #555; font-weight: 600; font-size: 14px; }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #28a745;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 0.5rem;
+        }
+        button:hover { background: #218838; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1.5rem;
+            font-size: 13px;
+        }
+        th {
+            background: #343a40;
+            color: #fff;
+            padding: 10px 6px;
+            text-align: right;
+            position: sticky;
+            top: 0;
+        }
+        th:first-child, th:nth-child(2) { text-align: center; }
+        td {
+            padding: 8px 6px;
+            border-bottom: 1px solid #e9ecef;
+            text-align: right;
+        }
+        td:first-child, td:nth-child(2) { text-align: center; font-weight: 600; }
+        tr:nth-child(even) { background: #f8f9fa; }
+        .paid-off { background: #d4edda !important; font-weight: 600; }
+        .error { color: #dc3545; text-align: center; margin-top: 0.5rem; display: none; }
+        .final-row {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: #e9ecef;
+            border-radius: 6px;
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .final-row strong { color: #333; }
+        .final-balance { font-size: 20px; font-weight: 700; color: #28a745; }
+        .final-balance.warn { color: #dc3545; }
+        .note { font-size: 13px; color: #666; margin-top: 0.5rem; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Debt Payoff Schedule</h2>
+
+    <div class="inputs">
+        <div class="input-group">
+            <label for="currency">Currency</label>
+            <select id="currency">
+                <option value="USD">USD ($)</option>
+                <option value="JPY">JPY (¥)</option>
+                <option value="CNY">CNY (¥)</option>
+                <option value="RUB">RUB (₽)</option>
+                <option value="EUR">EUR (€)</option>
+                <option value="GBP">GBP (£)</option>
+                <option value="CAD">CAD ($)</option>
+                <option value="AUD">AUD ($)</option>
+                <option value="INR">INR (₹)</option>
+            </select>
+        </div>
+        <div class="input-group">
+            <label for="startDate">Start Date</label>
+            <input type="date" id="startDate">
+        </div>
+        <div class="input-group">
+            <label for="balance">Balance Today</label>
+            <input type="number" id="balance" placeholder="e.g., 1000" min="0" step="0.01">
+        </div>
+        <div class="input-group">
+            <label for="rate">Annual Interest Rate (%)</label>
+            <input type="number" id="rate" placeholder="e.g., 4.9" min="0" step="0.01">
+        </div>
+        <div class="input-group">
+            <label for="payment">Monthly Payment</label>
+            <input type="number" id="payment" placeholder="e.g., 100" min="0" step="0.01">
+        </div>
+    </div>
+
+    <button onclick="buildSchedule()">Build Schedule</button>
+    <div id="errorMsg" class="error">Please enter valid positive numbers.</div>
+
+    <table id="schedule" style="display:none;">
+        <thead>
+            <tr>
+                <th>Period</th>
+                <th>Month</th>
+                <th>Beginning Balance</th>
+                <th>Interest Accrued</th>
+                <th>Balance + Interest</th>
+                <th>Payment + Interest</th>
+                <th>End Balance</th>
+            </tr>
+        </thead>
+        <tbody id="scheduleBody"></tbody>
+    </table>
+
+    <div id="finalRow" class="final-row">
+        <strong id="finalLabel">Final Balance:</strong>
+        <span>End Balance: <span id="finalBal" class="final-balance"></span></span>
+    </div>
+    <p id="note" class="note" style="display:none;"></p>
+</div>
+
+<script>
+(function() {
+    const today = new Date();
+    document.getElementById('startDate').value = today.toISOString().split('T')[0];
+})();
+
+const CURRENCIES = {
+    USD: { symbol: '$', decimals: 2 },
+    JPY: { symbol: '¥', decimals: 0 },
+    CNY: { symbol: '¥', decimals: 2 },
+    RUB: { symbol: '₽', decimals: 2 },
+    EUR: { symbol: '€', decimals: 2 },
+    GBP: { symbol: '£', decimals: 2 },
+    CAD: { symbol: '$', decimals: 2 },
+    AUD: { symbol: '$', decimals: 2 },
+    INR: { symbol: '₹', decimals: 2 }
+};
+
+function fmt(amount) {
+    const code = document.getElementById('currency').value;
+    const c = CURRENCIES[code];
+    return c.symbol + amount.toFixed(c.decimals);
+}
+
+function getDaysInPeriod(start, end) {
+    return Math.round((end - start) / (1000 * 60 * 60 * 24));
+}
+
+function formatPeriod(d) {
+    return d.getFullYear() + ' ' + d.toLocaleDateString('en-US', { month: 'short' });
+}
+
+function buildSchedule() {
+    const startDate = new Date(document.getElementById('startDate').value + 'T00:00:00');
+    const balance = parseFloat(document.getElementById('balance').value);
+    const annualRate = parseFloat(document.getElementById('rate').value);
+    const payment = parseFloat(document.getElementById('payment').value);
+
+    if (isNaN(balance) || isNaN(annualRate) || isNaN(payment) || balance <= 0 || payment <= 0 || isNaN(startDate.getTime())) {
+        document.getElementById('errorMsg').style.display = 'block';
+        document.getElementById('schedule').style.display = 'none';
+        document.getElementById('finalRow').style.display = 'none';
+        return;
+    }
+    document.getElementById('errorMsg').style.display = 'none';
+
+    const dailyRate = annualRate / 100 / 365;
+
+    // First pass: determine actual payoff month
+    let bal = balance;
+    let paidOffMonth = null;
+
+    for (let m = 0; m < 60; m++) {
+        if (bal <= 0) { paidOffMonth = m; break; }
+        const periodStart = new Date(startDate.getFullYear(), startDate.getMonth() + m, m === 0 ? startDate.getDate() : 1);
+        const periodEnd = new Date(startDate.getFullYear(), startDate.getMonth() + m + 1, 1);
+        const days = getDaysInPeriod(periodStart, periodEnd);
+        const interest = bal * dailyRate * days;
+        const balPlusInterest = bal + interest;
+        const pay = Math.min(payment, balPlusInterest);
+        bal = balPlusInterest - pay;
+        if (bal <= 0) { paidOffMonth = m + 1; bal = 0; }
+    }
+
+    let totalMonths;
+    if (paidOffMonth) {
+        totalMonths = Math.ceil(paidOffMonth / 12) * 12;
+    } else {
+        totalMonths = 60;
+    }
+
+    // Second pass: build the table
+    bal = balance;
+    let rows = '';
+
+    for (let m = 0; m < totalMonths; m++) {
+        const monthNum = m + 1;
+        const periodStart = new Date(startDate.getFullYear(), startDate.getMonth() + m, m === 0 ? startDate.getDate() : 1);
+        const periodEnd = new Date(startDate.getFullYear(), startDate.getMonth() + m + 1, 1);
+        const days = getDaysInPeriod(periodStart, periodEnd);
+        const periodLabel = formatPeriod(periodStart);
+
+        if (bal <= 0) {
+            rows += `<tr><td>${periodLabel}</td><td>${monthNum}</td><td>${fmt(0)}</td><td>${fmt(0)}</td><td>${fmt(0)}</td><td>—</td><td>${fmt(0)}</td></tr>`;
+            continue;
+        }
+
+        const interest = bal * dailyRate * days;
+        const balPlusInterest = bal + interest;
+        const pay = Math.min(payment, balPlusInterest);
+        const payPlusInterest = pay + interest;
+        const endBal = Math.max(0, balPlusInterest - pay);
+        bal = endBal;
+
+        const cls = bal <= 0 ? ' class="paid-off"' : '';
+        rows += `<tr${cls}>
+            <td>${periodLabel}</td>
+            <td>${monthNum}</td>
+            <td>${fmt(bal + pay)}</td>
+            <td>${fmt(interest)}</td>
+            <td>${fmt(balPlusInterest)}</td>
+            <td>${fmt(payPlusInterest)}</td>
+            <td>${fmt(endBal)}</td>
+        </tr>`;
+    }
+
+    document.getElementById('scheduleBody').innerHTML = rows;
+    document.getElementById('schedule').style.display = 'table';
+
+    const finalRow = document.getElementById('finalRow');
+    const finalBal = document.getElementById('finalBal');
+    finalRow.style.display = 'flex';
+
+    const labelMonth = paidOffMonth || totalMonths;
+    document.getElementById('finalLabel').textContent = `Final Balance After Month ${labelMonth}:`;
+    finalBal.textContent = fmt(bal);
+    finalBal.className = 'final-balance' + (bal > 0 ? ' warn' : '');
+
+    const note = document.getElementById('note');
+    note.style.display = 'block';
+    if (paidOffMonth) {
+        note.textContent = `✓ Debt paid off in month ${paidOffMonth}.`;
+    } else {
+        note.textContent = `⚠ Balance of ${fmt(bal)} remains after 60 months. Increase payment to pay off sooner.`;
+    }
+}
+</script>
+</body>
+</html>   
