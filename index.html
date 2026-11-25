@@ -212,9 +212,8 @@ function buildSchedule() {
         const periodEnd = new Date(startDate.getFullYear(), startDate.getMonth() + m + 1, 1);
         const days = getDaysInPeriod(periodStart, periodEnd);
         const interest = bal * dailyRate * days;
-        const balPlusInterest = bal + interest;
-        const pay = Math.min(payment, balPlusInterest);
-        bal = balPlusInterest - pay;
+        const pay = Math.min(payment, bal);
+        bal = bal - pay;
         if (bal <= 0) { paidOffMonth = m + 1; bal = 0; }
     }
 
@@ -241,18 +240,19 @@ function buildSchedule() {
             continue;
         }
 
-        const interest = bal * dailyRate * days;
-        const balPlusInterest = bal + interest;
-        const pay = Math.min(payment, balPlusInterest);
+        const beginningBal = bal;
+        const interest = beginningBal * dailyRate * days;
+        const balPlusInterest = beginningBal + interest;
+        const pay = Math.min(payment, beginningBal);
         const payPlusInterest = pay + interest;
-        const endBal = Math.max(0, balPlusInterest - pay);
+        const endBal = Math.max(0, balPlusInterest - payPlusInterest);
         bal = endBal;
 
         const cls = bal <= 0 ? ' class="paid-off"' : '';
         rows += `<tr${cls}>
             <td>${periodLabel}</td>
             <td>${monthNum}</td>
-            <td>${fmt(bal + pay)}</td>
+            <td>${fmt(beginningBal)}</td>
             <td>${fmt(interest)}</td>
             <td>${fmt(balPlusInterest)}</td>
             <td>${fmt(payPlusInterest)}</td>
