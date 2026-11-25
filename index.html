@@ -201,20 +201,21 @@ function buildSchedule() {
     document.getElementById('errorMsg').style.display = 'none';
 
     const dailyRate = annualRate / 100 / 365;
+    const EPSILON = 0.005;
 
     // First pass: determine actual payoff month
     let bal = balance;
     let paidOffMonth = null;
 
     for (let m = 0; m < 60; m++) {
-        if (bal <= 0) { paidOffMonth = m; break; }
+        if (bal < EPSILON) { paidOffMonth = m; break; }
         const periodStart = new Date(startDate.getFullYear(), startDate.getMonth() + m, m === 0 ? startDate.getDate() : 1);
         const periodEnd = new Date(startDate.getFullYear(), startDate.getMonth() + m + 1, 1);
         const days = getDaysInPeriod(periodStart, periodEnd);
         const interest = bal * dailyRate * days;
         const pay = Math.min(payment, bal);
         bal = bal - pay;
-        if (bal <= 0) { paidOffMonth = m + 1; bal = 0; }
+        if (bal < EPSILON) { paidOffMonth = m + 1; bal = 0; }
     }
 
     let totalMonths;
@@ -235,7 +236,7 @@ function buildSchedule() {
         const days = getDaysInPeriod(periodStart, periodEnd);
         const periodLabel = formatPeriod(periodStart);
 
-        if (bal <= 0) {
+        if (bal < EPSILON) {
             rows += `<tr><td>${periodLabel}</td><td>${monthNum}</td><td>${fmt(0)}</td><td>${fmt(0)}</td><td>${fmt(0)}</td><td>—</td><td>${fmt(0)}</td></tr>`;
             continue;
         }
@@ -245,10 +246,11 @@ function buildSchedule() {
         const balPlusInterest = beginningBal + interest;
         const pay = Math.min(payment, beginningBal);
         const payPlusInterest = pay + interest;
-        const endBal = Math.max(0, balPlusInterest - payPlusInterest);
+        let endBal = Math.max(0, balPlusInterest - payPlusInterest);
+        if (endBal < EPSILON) endBal = 0;
         bal = endBal;
 
-        const cls = bal <= 0 ? ' class="paid-off"' : '';
+        const cls = bal < EPSILON ? ' class="paid-off"' : '';
         rows += `<tr${cls}>
             <td>${periodLabel}</td>
             <td>${monthNum}</td>
